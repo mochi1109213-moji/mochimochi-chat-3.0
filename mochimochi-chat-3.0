@@ -447,9 +447,6 @@
       };
 
       const getBotResponse = (text) => {
-        if (text.includes("/過疎")) {
-          return "過疎です。はい。";
-        }
         if (text.includes("/ヘルプ"))
           return "・/cmd [文章] でアナウンス(Admin)\n・/nuke で全消去(Admin)\n・「占い」で運勢";
         if (text.includes("/占い")) {
