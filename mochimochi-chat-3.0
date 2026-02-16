@@ -401,7 +401,7 @@
         serverTimestamp,
       } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
 
-      // --- CONFIG (あなたのものに差し替え) ---
+      // --- CONFIG ---
       const firebaseConfig = {
         apiKey: "AIzaSyCVoT10q21bNe7ks6DrLZWkl0JIJ2cIa0s",
         authDomain: "mochimochi-chat8.firebaseapp.com",
@@ -447,9 +447,9 @@
       };
 
       const getBotResponse = (text) => {
-        if (text.includes("/過疎")){
+        if (text.includes("/過疎")) {
           return "過疎です。はい。";
-}
+        }
         if (text.includes("/ヘルプ"))
           return "・/cmd [文章] でアナウンス(Admin)\n・/nuke で全消去(Admin)\n・「占い」で運勢";
         if (text.includes("/占い")) {
@@ -481,12 +481,13 @@
             icon: `https://api.dicebear.com/7.x/avataaars/svg?seed=${id}`,
             role: 0,
             lastLogin: Date.now(),
+            status: "online"
           };
           await set(userRef, newProf);
           loginSuccess(id, newProf);
         } else {
           if (!snap.exists() || snap.val().password !== pw)
-            return alert("認証失敗");
+            return alert("ユーザー名またはパスワードが違います");
           loginSuccess(id, snap.val());
         }
       };
@@ -504,18 +505,17 @@
         startApp();
         cleanOldData();
         sendSystemMessage("public", `${myProfile.name}さんが入室しました`);
-      // 権限監視
-      onValue(ref(db, `users/${myUid}/role`), (snap) => {
+        
+        onValue(ref(db, `users/${myUid}/role`), (snap) => {
           const role = snap.val() || 0;
           isAdmin = role === 2;
-          if (myProfile) myProfile.role = role; // プロフィール内のroleも更新
+          if (myProfile) myProfile.role = role;
           document.getElementById("adminPanel").style.display = isAdmin ? "block" : "none";
           if (isAdmin) listenToLogs();
           renderRoomList();
         });
       }
 
-      // --- 5日ルール掃除 ---
       async function cleanOldData() {
         const cutoff = Date.now() - 5 * 24 * 60 * 60 * 1000;
         const chatSnap = await get(ref(db, "chat_data"));
@@ -527,33 +527,21 @@
         });
       }
 
-      // --- メインアプリ ---
       function startApp() {
-        // アナウンス監視
         onValue(ref(db, "announcement"), (snap) => {
           const bar = document.getElementById("announcementBar");
-          bar.style.display = snap.val() ? "block" : "none";
-          if (snap.val()) bar.innerText = `📢 ${snap.val().text}`;
+          const data = snap.val();
+          bar.style.display = data ? "block" : "none";
+          if (data) bar.innerText = `📢 ${data.text}`;
         });
 
-        // 権限監視
-        onValue(ref(db, `users/${myUid}/role`), (snap) => {
-          isAdmin = snap.val() === 2;
-          document.getElementById("adminPanel").style.display = isAdmin
-            ? "block"
-            : "none";
-          if (isAdmin) listenToLogs();
-          renderRoomList();
-        });
-
-        // --- 参加者リストの監視部分 ---
         onValue(ref(db, "users"), (snap) => {
           const list = document.getElementById("userList");
           list.innerHTML = `<div class="item-btn"><img src="${BOT_INFO.icon}" class="icon-img"><div>${BOT_INFO.name} [BOT]</div></div>`;
 
           snap.forEach((c) => {
             const u = c.val();
-            const targetUid = c.key; // 相手のID
+            const targetUid = c.key;
             const item = document.createElement("div");
             item.className = "item-btn";
             item.innerHTML = `
@@ -563,7 +551,6 @@
             }</div>
           `;
 
-            // 【追加】管理者なら、名前をクリックしてメニューを出す
             item.onclick = () => {
               if (isAdmin && targetUid !== myUid) {
                 const action = prompt(
@@ -571,18 +558,16 @@
                 );
 
                 if (action === "1") {
-                  if (confirm(`${u.name} をアカウント削除して追放しますか？`)) {
+                  if (confirm(`${u.name} を削除しますか？`)) {
                     remove(ref(db, `users/${targetUid}`));
-                    addAdminLog(
-                      `KICK: ${myProfile.name}が ${u.name}を追放しました`
-                    );
+                    addAdminLog(`KICK: ${u.name}`);
                   }
                 } else if (action === "2") {
                   update(ref(db, `users/${targetUid}`), { role: 1 });
-                  addAdminLog(`PROMOTED: ${u.name}が副管理者に昇格しました`);
+                  addAdminLog(`PROMOTED: ${u.name}`);
                 } else if (action === "3") {
                   update(ref(db, `users/${targetUid}`), { role: 0 });
-                  addAdminLog(`DEMOTED: ${u.name}を一般に戻しました`);
+                  addAdminLog(`DEMOTED: ${u.name}`);
                 }
               }
             };
@@ -591,19 +576,13 @@
         });
 
         listenToMessages("public");
-        // --- ここから追加 ---
-        // 自分のアカウントが削除されたらリロード（強制ログアウト）させる
+        
         onValue(ref(db, `users/${myUid}`), (snap) => {
           if (!snap.exists()) {
-            alert(
-              "アカウントが管理者によって削除されたか、5日間ログインがなかったため、自動的にログアウトします。"
-            );
+            alert("セッションが終了しました。");
             location.reload();
           }
         });
-        // --- ここまで追加 ---
-        // startApp関数の中
-        if (isAdmin) listenToLogs(); // 管理者ならログ監視を開始する
       }
 
       function listenToLogs() {
@@ -616,7 +595,7 @@
             const logData = c.val();
             const d = document.createElement("div");
             d.className = "log-msg";
-            d.innerText = logData.text; // ログの内容を表示
+            d.innerText = logData.text;
             area.appendChild(d);
           });
           area.scrollTop = area.scrollHeight;
@@ -624,27 +603,24 @@
       }
 
       function renderRoomList() {
-        onValue(
-          ref(db, "rooms"),
-          (snap) => {
+        onValue(ref(db, "rooms"), (snap) => {
             const rList = document.getElementById("roomList");
             rList.innerHTML = `<div class="item-btn ${
               currentRoomId === "public" ? "active-item" : ""
             }" onclick="listenToMessages('public')">🏠 ロビー</div>`;
             snap.forEach((c) => {
               const item = document.createElement("div");
-              item.className = `item-btn ${
-                currentRoomId === c.key ? "active-item" : ""
-              }`;
-              item.innerHTML = `<div onclick="listenToMessages('${
-                c.key
-              }')" style="flex:1">💬 ${c.val().name}</div>`;
+              item.className = `item-btn ${currentRoomId === c.key ? "active-item" : ""}`;
+              item.innerHTML = `<div onclick="listenToMessages('${c.key}')" style="flex:1">💬 ${c.val().name}</div>`;
               if (isAdmin) {
                 const del = document.createElement("span");
                 del.innerText = "×";
-                del.onclick = () => {
-                  remove(ref(db, `rooms/${c.key}`));
-                  remove(ref(db, `chat_data/${c.key}`));
+                del.onclick = (e) => {
+                  e.stopPropagation();
+                  if(confirm("部屋を消しますか？")){
+                    remove(ref(db, `rooms/${c.key}`));
+                    remove(ref(db, `chat_data/${c.key}`));
+                  }
                 };
                 item.appendChild(del);
               }
@@ -663,7 +639,7 @@
           container.innerHTML = "";
           snap.forEach((child) => {
             const m = child.val();
-            const msgKey = child.key; // ★ここでメッセージのIDを固定する
+            const msgKey = child.key;
             
             if (m.uid === "system") {
               const s = document.createElement("div");
@@ -678,53 +654,33 @@
             div.className = `msg-box ${isMe ? "my-msg" : ""}`;
             div.innerHTML = `<img src="${m.icon}" class="icon-img"><div class="bubble">${m.text}</div>`;
 
-            // 長押し削除・返信
             let t;
-            div.onmousedown = div.ontouchstart = (e) => {
-              // 右クリックや長押し時にデフォルトメニューを出さない
-              if(e.type === 'touchstart') {
-                  // スマホ用処理
-              }
-
-              t = setTimeout(() => {
+            const showMenu = (e) => {
+                e.preventDefault();
                 const menu = document.getElementById("msgMenu");
-                // 表示位置の計算
                 const x = e.clientX || (e.touches ? e.touches[0].clientX : 0);
                 const y = e.clientY || (e.touches ? e.touches[0].clientY : 0);
-                
                 menu.style.display = "flex";
                 menu.style.left = x + "px";
                 menu.style.top = y + "px";
                 document.getElementById("menuOverlay").style.display = "block";
 
-                // --- 削除ボタンの動作（ここが重要） ---
                 document.getElementById("menuDelete").onclick = () => {
-                  const myCurrentRole = (myProfile && myProfile.role) ? myProfile.role : 0;
-                  
-                  // 自分、または管理者(2)、または副管理者(1)なら削除実行
-                  if (isMe || isAdmin || myCurrentRole === 1) {
-                    if (confirm("このメッセージを完全に消去しますか？")) {
-                      // 固定したmsgKeyを使ってピンポイントで削除
-                      remove(ref(db, `chat_data/${currentRoomId}/${msgKey}`))
-                        .then(() => {
-                          addAdminLog(`DELETE: ${myProfile.name}が ${m.name}の投稿を消しました`);
-                        })
-                        .catch(err => alert("削除エラー: " + err.message));
+                  if (isMe || isAdmin || (myProfile && myProfile.role === 1)) {
+                    if (confirm("消去しますか？")) {
+                      remove(ref(db, `chat_data/${currentRoomId}/${msgKey}`));
                     }
                   } else {
-                    alert("メッセージを消す権限がありません。");
+                    alert("権限がありません");
                   }
                   closeMenus();
                 };
-
-                // 返信ボタン（※返信機能が未実装の場合はalertを出すか非表示に）
-                document.getElementById("menuReply").onclick = () => {
-                  alert("返信機能は現在準備中です");
-                  closeMenus();
-                };
-              }, 600);
             };
-            div.onmouseup = div.ontouchend = () => clearTimeout(t);
+
+            div.oncontextmenu = (e) => showMenu(e);
+            div.ontouchstart = (e) => { t = setTimeout(() => showMenu(e), 600); };
+            div.ontouchend = () => clearTimeout(t);
+            
             container.appendChild(div);
           });
           container.scrollTop = container.scrollHeight;
@@ -732,26 +688,26 @@
       };
 
       window.sendMessage = (txt) => {
-        if (!txt) return;
+        if (!txt.trim()) return;
 
-        // 管理者コマンド
         if (isAdmin) {
           if (txt.startsWith("/cmd ")) {
             set(ref(db, "announcement"), { text: txt.replace("/cmd ", "") });
-            addAdminLog("アナウンス更新");
+            document.getElementById("msgInput").value = "";
             return;
           }
           if (txt === "/cmd-off") {
             set(ref(db, "announcement"), null);
+            document.getElementById("msgInput").value = "";
             return;
           }
           if (txt === "/nuke") {
             if (confirm("全消去？")) remove(ref(db, "chat_data"));
+            document.getElementById("msgInput").value = "";
             return;
           }
         }
 
-        // 通常送信
         push(ref(db, `chat_data/${currentRoomId}`), {
           uid: myUid,
           name: myProfile.name,
@@ -760,7 +716,6 @@
           time: serverTimestamp(),
         });
 
-        // Bot反応
         const botRes = getBotResponse(txt);
         if (botRes) {
           setTimeout(() => {
@@ -782,31 +737,23 @@
         if (e.key === "Enter") sendMessage(e.target.value);
       };
 
-      // 設定 & 管理者昇格
       const sBtn = document.getElementById("settingsBtn");
       let sTimer;
       sBtn.onmousedown = sBtn.ontouchstart = () => {
         sTimer = setTimeout(() => {
           if (prompt("Admin Pass") === "45454545454519191919191919") {
             update(ref(db, `users/${myUid}`), { role: 2 });
-            alert("管理者権限を取得しました");
+            alert("管理者になりました");
           }
         }, 3000);
       };
       sBtn.onmouseup = sBtn.ontouchend = () => clearTimeout(sTimer);
       sBtn.onclick = () => {
         const newName = prompt("名前変更", myProfile.name);
-        const newIcon = prompt("アイコンURL変更", myProfile.icon);
-        const up = {};
         if (newName) {
-          up.name = newName;
+          update(ref(db, `users/${myUid}`), { name: newName });
           myProfile.name = newName;
         }
-        if (newIcon) {
-          up.icon = newIcon;
-          myProfile.icon = newIcon;
-        }
-        update(ref(db, `users/${myUid}`), up);
       };
 
       document.getElementById("addRoomBtn").onclick = () => {
@@ -825,10 +772,9 @@
       const switchAuthBtn = document.getElementById("switchAuthBtn");
       switchAuthBtn.onclick = () => {
         isRegisterMode = !isRegisterMode;
-        document.getElementById("authTitle").innerText = isRegisterMode
-          ? "新規登録"
-          : "ログイン";
+        document.getElementById("authTitle").innerText = isRegisterMode ? "新規登録" : "ログイン";
         authSubmitBtn.innerText = isRegisterMode ? "登録" : "ログイン";
+        switchAuthBtn.innerText = isRegisterMode ? "ログインはこちら" : "新規登録はこちら";
       };
     </script>
   </body>
